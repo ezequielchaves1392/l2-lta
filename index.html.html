@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>L2 la tenes adentro</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #2c3e50; font-family: 'Segoe UI', sans-serif; user-select: none; }
+        #ui { position: absolute; top: 15px; left: 15px; color: #fff; background: rgba(20, 25, 35, 0.85); padding: 15px; border-radius: 8px; border: 1px solid #4a5568; pointer-events: none; }
+        progress { width: 150px; height: 12px; accent-color: #e74c3c; }
+        
+        #top-hud-center {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 15px; align-items: center; pointer-events: none; z-index: 10;
+        }
+
+        #clock-display {
+            color: #3498db; background: rgba(20, 25, 35, 0.9); padding: 8px 16px; border-radius: 8px; font-size: 16px; font-weight: bold; border: 1px solid #4a5568; text-shadow: 1px 1px 2px #000;
+        }
+
+        #fps-counter {
+            color: #f1c40f; background: rgba(20, 25, 35, 0.9); padding: 8px 16px; border-radius: 8px; font-size: 16px; font-weight: bold; border: 1px solid #4a5568; text-shadow: 1px 1px 2px #000;
+        }
+
+        #controls-top {
+            position: absolute; top: 15px; right: 15px; display: flex; flex-direction: column; gap: 8px; pointer-events: auto; z-index: 10; width: 180px;
+        }
+
+        .top-btn { 
+            background: #f1c40f; border: none; color: #000; font-weight: bold; padding: 8px 12px; border-radius: 6px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 12px; width: 100%; text-align: center;
+        }
+        .top-btn:hover { background: #f39c12; transform: translateY(-2px); }
+
+        #shop { 
+            position: absolute; top: 280px; right: 15px; color: #fff; 
+            background: rgba(20, 25, 35, 0.95); padding: 15px; border-radius: 8px; 
+            border: 1px solid #f1c40f; display: none; width: 220px; pointer-events: auto; z-index: 10;
+        }
+        .shop-btn { background: #f1c40f; border: none; color: #000; font-weight: bold; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-top: 6px; display: block; width: 100%; transition: 0.2s; }
+        .shop-btn:hover { background: #f39c12; }
+
+        .damage-number {
+            position: absolute;
+            color: #ff3838;
+            font-weight: bold;
+            font-size: 20px;
+            text-shadow: 2px 2px 0px #000;
+            pointer-events: none;
+            animation: floatUp 0.8s ease-out forwards;
+        }
+        .damage-player { color: #f1c40f; }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-50px) scale(1.2); }
+        }
+
+        .mob-hp-container {
+            position: absolute;
+            width: 40px;
+            height: 6px;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid #000;
+            border-radius: 2px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .mob-hp-fill {
+            height: 100%;
+            background: #e74c3c;
+            width: 100%;
+            transition: width 0.1s;
+        }
+
+        .player-hp-container {
+            position: absolute;
+            width: 50px;
+            height: 7px;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid #000;
+            border-radius: 2px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .player-hp-fill {
+            height: 100%;
+            background: #2ecc71;
+            width: 100%;
+            transition: width 0.1s;
+        }
+
+        #flash-overlay {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #000000; opacity: 0; pointer-events: none; z-index: 99;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        #damage-flash {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(255, 0, 0, 0.35); opacity: 0; pointer-events: none; z-index: 98;
+            transition: opacity 0.15s ease-in-out;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+<div id="flash-overlay"></div>
+<div id="damage-flash"></div>
+
+<div id="top-hud-center">
+    <div id="clock-display">Hora: 06:00 AM</div>
+    <div id="fps-counter">FPS: <span id="fpsVal">60</span></div>
+</div>
+
+<div id="ui">
+    <div style="font-weight: bold; margin-bottom: 5px; color: #f1c40f;">L2 LA TENES ADENTRO</div>
+    <div>Vida: <progress id="hpBar" value="100" max="100"></progress> <span id="hpText">100/100</span></div>
+    <div>Oro: <span id="gold">0</span> | Daño: <span id="atk">25</span></div>
+    <p style="margin: 8px 0 0 0; font-size: 11px; color: #cbd5e0;">[WASD] Mover | [Espacio x2] Doble Salto con Giro hacia Adelante + Impulso | [B] Tienda</p>
+</div>
+
+<div id="controls-top">
+    <button class="top-btn" onclick="toggleShop()">Tienda [B]</button>
+    <button class="top-btn" id="glowBtn" onclick="toggleGlow()" style="background: #3498db; color: white;">Brillo Flúor: OFF</button>
+    <button class="top-btn" id="fireBtn" onclick="toggleFire()" style="background: #e67e22; color: white;">Fuego: OFF</button>
+    <button class="top-btn" id="thunderBtn" onclick="toggleThunder()" style="background: #2980b9; color: white;">Trueno: OFF</button>
+    <button class="top-btn" id="rainBtn" onclick="toggleRain()" style="background: #2980b9; color: white;">Lluvia: OFF</button>
+    <button class="top-btn" id="snowBtn" onclick="toggleSnow()" style="background: #5dade2; color: white;">Nieve: OFF</button>
+    <button class="top-btn" id="weaponBtn" onclick="toggleWeaponModel()" style="background: #9b59b6; color: white;">Arma: Normal</button>
+</div>
+
+<div id="shop">
+    <div style="font-weight: bold; margin-bottom: 8px; color: #f1c40f;">TIENDA DE MEJORAS</div>
+    <div style="font-size: 12px; margin-bottom: 8px; color: #aaa;">Precio: 50 Oro c/u</div>
+    <button class="shop-btn" onclick="buyUpgrade('atk')">+15 Daño de Espada</button>
+    <button class="shop-btn" onclick="buyUpgrade('heal')">Curar Vida Completa</button>
+</div>
+
+<script>
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x3a6073);
+    scene.fog = new THREE.FogExp2(0x3a6073, 0.015);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfffaed, 0.8);
+    dirLight.position.set(30, 50, 30);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 150;
+    const d = 50;
+    dirLight.shadow.camera.left = -d;
+    dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d;
+    dirLight.shadow.camera.bottom = -d;
+    scene.add(dirLight);
+
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(160, 160),
+        new THREE.MeshStandardMaterial({ color: 0x4a7c3f, roughness: 0.9 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    const path = new THREE.Mesh(
+        new THREE.PlaneGeometry(6, 160),
+        new THREE.MeshStandardMaterial({ color: 0x7f8c8d, roughness: 0.8 })
+    );
+    path.rotation.x = -Math.PI / 2;
+    path.position.y = 0.01;
+    path.receiveShadow = true;
+    scene.add(path);
+
+    const snowCanvas = document.createElement('canvas');
+    snowCanvas.width = 1024;
+    snowCanvas.height = 1024;
+    const snowCtx = snowCanvas.getContext('2d');
+    
+    function resetSnowCanvas(isWhite) {
+        snowCtx.fillStyle = isWhite ? '#ffffff' : '#4a7c3f';
+        snowCtx.fillRect(0, 0, 1024, 1024);
+    }
+    resetSnowCanvas(false);
+
+    const snowTexture = new THREE.CanvasTexture(snowCanvas);
+    const snowGround = new THREE.Mesh(
+        new THREE.PlaneGeometry(160, 160),
+        new THREE.MeshStandardMaterial({ map: snowTexture, roughness: 0.9 })
+    );
+    snowGround.rotation.x = -Math.PI / 2;
+    snowGround.position.y = 0.015;
+    snowGround.receiveShadow = true;
+    snowGround.visible = false;
+    scene.add(snowGround);
+
+    const waterPools = [
+        { x: -35, z: -25, w: 25, h: 20 },
+        { x: 38, z: -35, w: 20, h: 18 },
+        { x: -38, z: 35, w: 22, h: 22 },
+        { x: 35, z: 30, w: 18, h: 18 }
+    ];
+
+    waterPools.forEach(pool => {
+        const waterMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(pool.w, pool.h),
+            new THREE.MeshStandardMaterial({ color: 0x3498db, roughness: 0.2, metalness: 0.3, transparent: true, opacity: 0.85 })
+        );
+        waterMesh.rotation.x = -Math.PI / 2;
+        waterMesh.position.set(pool.x, 0.03, pool.z);
+        waterMesh.receiveShadow = true;
+        scene.add(waterMesh);
+    });
+
+    let obstacles = [];
+    let particles = [];
+    let bloodDecals = [];
+    let gorePieces = [];
+    let raindrops = [];
+    let snowflakes = [];
+    let snowCaps = []; 
+    let isRainOn = false;
+    let isSnowOn = false;
+
+    const caves = [
+        { x: 0, z: -55, maxMobs: 3, currentMobs: 0, spawningTimer: 0 }, 
+        { x: -45, z: 5, maxMobs: 4, currentMobs: 0, spawningTimer: 0 }, 
+        { x: 45, z: 10, maxMobs: 3, currentMobs: 0, spawningTimer: 0 }  
+    ];
+
+    caves.forEach(caveData => {
+        const caveGroup = new THREE.Group();
+        const caveWalls = new THREE.Mesh(new THREE.BoxGeometry(6, 4.5, 6), new THREE.MeshStandardMaterial({ color: 0x34495e, roughness: 0.9 }));
+        caveWalls.position.y = 2.25;
+        caveWalls.castShadow = true;
+        caveWalls.receiveShadow = true;
+        caveGroup.add(caveWalls);
+        
+        const caveEntrance = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.5, 0.2), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+        caveEntrance.position.set(0, 1.25, 3.1);
+        caveGroup.add(caveEntrance);
+
+        const caveSnow = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.3, 6.2), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }));
+        caveSnow.position.set(0, 4.65, 0);
+        caveSnow.visible = false;
+        caveGroup.add(caveSnow);
+        snowCaps.push(caveSnow);
+
+        caveGroup.position.set(caveData.x, 0, caveData.z);
+        scene.add(caveGroup);
+        obstacles.push({ x: caveData.x, z: caveData.z, radius: 3.2, height: 4.5, isPlatform: true });
+    });
+
+    function createTree(x, z, isGiant = false) {
+        const treeGroup = new THREE.Group();
+        let scale = isGiant ? 2.2 : 1.2;
+        treeGroup.scale.set(scale, scale, scale);
+
+        const trunk = new THREE.Mesh(
+            new THREE.BoxGeometry(0.8, 3.0, 0.8), 
+            new THREE.MeshStandardMaterial({ color: isGiant ? 0x4e342e : 0x8e44ad })
+        );
+        trunk.position.y = 1.5;
+        trunk.castShadow = true;
+        trunk.receiveShadow = true;
+        treeGroup.add(trunk);
+
+        const leaves = new THREE.Mesh(
+            new THREE.BoxGeometry(3.2, 3.5, 3.2), 
+            new THREE.MeshStandardMaterial({ color: isGiant ? 0x1b5e20 : 0x27ae60 })
+        );
+        leaves.position.y = 4.5; 
+        leaves.castShadow = true;
+        treeGroup.add(leaves);
+
+        const leavesSnow = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.6, 3.3), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }));
+        leavesSnow.position.set(0, 5.9, 0);
+        leavesSnow.visible = false;
+        treeGroup.add(leavesSnow);
+        snowCaps.push(leavesSnow);
+
+        if (isGiant) {
+            const extraLeaves = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.2, 2.2), new THREE.MeshStandardMaterial({ color: 0x2e7d32 }));
+            extraLeaves.position.set(1.3, 5.0, 0);
+            extraLeaves.castShadow = true;
+            treeGroup.add(extraLeaves);
+
+            const extraLeavesSnow = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.5, 2.3), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }));
+            extraLeavesSnow.position.set(1.3, 5.9, 0);
+            extraLeavesSnow.visible = false;
+            treeGroup.add(extraLeavesSnow);
+            snowCaps.push(extraLeavesSnow);
+        }
+
+        treeGroup.position.set(x, 0, z);
+        scene.add(treeGroup);
+        
+        obstacles.push({ 
+            x: x, 
+            z: z, 
+            radius: (isGiant ? 2.2 : 1.4), 
+            height: (isGiant ? 7.5 : 5.0), 
+            isPlatform: true, 
+            isTree: true 
+        });
+    }
+
+    for (let i = -70; i <= 70; i += 12) {
+        let leftX = -18 - Math.random() * 8;
+        let rightX = 18 + Math.random() * 8;
+        
+        if (!waterPools.some(p => Math.hypot(leftX - p.x, i - p.z) < 18)) {
+            createTree(leftX, i, Math.random() > 0.6);
+        }
+        if (!waterPools.some(p => Math.hypot(rightX - p.x, i - p.z) < 18)) {
+            createTree(rightX, i, Math.random() > 0.6);
+        }
+
+        if (Math.abs(i) < 50) {
+            let farLeftX = -35 - Math.random() * 6;
+            let farRightX = 30 + Math.random() * 6;
+            if (!waterPools.some(p => Math.hypot(farLeftX - p.x, i - p.z) < 16)) {
+                createTree(farLeftX, i, true);
+            }
+            if (!waterPools.some(p => Math.hypot(farRightX - p.x, i - p.z) < 16)) {
+                createTree(farRightX, i, false);
+            }
+        }
+    }
+
+    function createPlatform(type, x, z) {
+        let mesh, height, radius;
+        const group = new THREE.Group();
+
+        if (type === 'stone') {
+            height = 1.4;
+            radius = 1.2;
+            mesh = new THREE.Mesh(new THREE.BoxGeometry(2.2, height, 2.2), new THREE.MeshStandardMaterial({ color: 0x95a5a6, roughness: 0.8 }));
+            mesh.position.y = height / 2;
+        } else if (type === 'crate') {
+            height = 1.5;
+            radius = 1.0;
+            mesh = new THREE.Mesh(new THREE.BoxGeometry(1.8, height, 1.8), new THREE.MeshStandardMaterial({ color: 0xd35400, roughness: 0.7 }));
+            mesh.position.y = height / 2;
+        } else if (type === 'barrel') {
+            height = 1.2;
+            radius = 0.8;
+            mesh = new THREE.Mesh(new THREE.BoxGeometry(1.4, height, 1.4), new THREE.MeshStandardMaterial({ color: 0x2980b9, roughness: 0.5 }));
+            mesh.position.y = height / 2;
+        }
+
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+
+        let snowGeo = type === 'stone' ? new THREE.BoxGeometry(2.25, 0.25, 2.25) : (type === 'crate' ? new THREE.BoxGeometry(1.85, 0.25, 1.85) : new THREE.BoxGeometry(1.45, 0.25, 1.45));
+        const objSnow = new THREE.Mesh(snowGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }));
+        objSnow.position.y = height + 0.125;
+        objSnow.visible = false;
+        group.add(objSnow);
+        snowCaps.push(objSnow);
+
+        group.position.set(x, 0, z);
+        scene.add(group);
+        obstacles.push({ x: x, z: z, radius: radius, height: height, isPlatform: true });
+    }
+
+    function createHill(x, z, width, height, depth, color = 0x3b7a57) {
+        const group = new THREE.Group();
+        const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(width, height, depth),
+            new THREE.MeshStandardMaterial({ color: color, roughness: 0.9 })
+        );
+        mesh.position.y = height / 2;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+
+        const snowTop = new THREE.Mesh(
+            new THREE.BoxGeometry(width + 0.1, 0.3, depth + 0.1),
+            new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 })
+        );
+        snowTop.position.y = height + 0.15;
+        snowTop.visible = false;
+        group.add(snowTop);
+        snowCaps.push(snowTop);
+
+        group.position.set(x, 0, z);
+        scene.add(group);
+
+        obstacles.push({
+            x: x,
+            z: z,
+            radius: Math.max(width, depth) / 2.0,
+            height: height,
+            isPlatform: true
+        });
+    }
+
+    createHill(-25, -15, 8, 3.5, 8);
+    createHill(25, -20, 10, 4.0, 9);
+    createHill(-30, 20, 9, 3.0, 10);
+    createHill(28, 25, 12, 5.0, 8);
+    createHill(0, -40, 14, 4.5, 7);
+
+    createPlatform('stone', -12, -25);
+    createPlatform('crate', 10, -30);
+    createPlatform('barrel', -8, -10);
+    createPlatform('stone', 12, 5);
+    createPlatform('crate', -16, 22);
+    createPlatform('barrel', 15, 28);
+    createPlatform('stone', 0, 12);
+    createPlatform('crate', -5, -18);
+    createPlatform('stone', 6, -15);
+    createPlatform('barrel', -14, 0);
+    createPlatform('crate', 14, -8);
+    createPlatform('stone', -4, 35);
+    createPlatform('barrel', 8, 40);
+
+    const playerContainer = new THREE.Group();
+    const playerGroup = new THREE.Group();
+    playerContainer.add(playerGroup);
+    scene.add(playerContainer);
+
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0x3498db }); 
+    const limbMat = new THREE.MeshStandardMaterial({ color: 0x2980b9 }); 
+    const hatMat = new THREE.MeshStandardMaterial({ color: 0xe74c3c });  
+
+    const mainBody = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), skinMat);
+    mainBody.position.y = 0.8;
+    mainBody.castShadow = true;
+    playerGroup.add(mainBody);
+
+    const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+    leftEye.position.set(0.25, 0.9, 0.51);
+    playerGroup.add(leftEye);
+
+    const rightEye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+    rightEye.position.set(-0.25, 0.9, 0.51);
+    playerGroup.add(rightEye);
+
+    const hat = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.35, 1.05), hatMat);
+    hat.position.y = 1.47;
+    hat.castShadow = true;
+    playerGroup.add(hat);
+
+    const leftHandPivot = new THREE.Group();
+    leftHandPivot.position.set(0.65, 0.8, 0);
+    const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), limbMat);
+    leftHand.position.set(0, -0.15, 0);
+    leftHandPivot.add(leftHand);
+    playerGroup.add(leftHandPivot);
+
+    const rightHandPivot = new THREE.Group();
+    rightHandPivot.position.set(-0.65, 0.8, 0);
+    const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), limbMat);
+    rightHand.position.set(0, -0.15, 0);
+    rightHandPivot.add(rightHand);
+    playerGroup.add(rightHandPivot);
+
+    const leftFootPivot = new THREE.Group();
+    leftFootPivot.position.set(0.25, 0.3, 0);
+    const leftFoot = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), limbMat);
+    leftFoot.position.set(0, -0.175, 0);
+    leftFootPivot.add(leftFoot);
+    playerGroup.add(leftFootPivot);
+
+    const rightFootPivot = new THREE.Group();
+    rightFootPivot.position.set(-0.25, 0.3, 0);
+    const rightFoot = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), limbMat);
+    rightFoot.position.set(0, -0.175, 0);
+    rightFootPivot.add(rightFoot);
+    playerGroup.add(rightFootPivot);
+
+    const sheathGroup = new THREE.Group();
+    sheathGroup.position.set(0, 0.85, -0.5);
+    sheathGroup.rotation.z = Math.PI / 4; 
+    
+    const sheathMesh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.3, 0.15), new THREE.MeshStandardMaterial({ color: 0x4a2e18 }));
+    sheathMesh.castShadow = true;
+    sheathGroup.add(sheathMesh);
+
+    const storedHiltGroup = new THREE.Group();
+    storedHiltGroup.position.set(0, 0.75, 0);
+    const storedHandle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.3, 0.12), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+    const storedGuard = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.15), new THREE.MeshStandardMaterial({ color: 0xbdc3c7, metalness: 0.9 }));
+    storedGuard.position.y = -0.15;
+    storedHiltGroup.add(storedHandle);
+    storedHiltGroup.add(storedGuard);
+    sheathGroup.add(storedHiltGroup);
+
+    playerGroup.add(sheathGroup);
+
+    const weaponPivot = new THREE.Group();
+    weaponPivot.position.set(0, -0.15, 0);
+    rightHandPivot.add(weaponPivot);
+
+    const swordLight = new THREE.PointLight(0xffff00, 0, 8);
+    swordLight.position.set(0, 0, 0);
+    scene.add(swordLight);
+
+    const brightSteelMat = new THREE.MeshStandardMaterial({ 
+        color: 0xffffff, 
+        metalness: 0.9, 
+        roughness: 0.1,
+        emissive: 0x999999,
+        emissiveIntensity: 0.35
+    }); 
+
+    const normalSwordGroup = new THREE.Group();
+    normalSwordGroup.position.set(0, 0, 0.4);
+    
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.1, 0.08), brightSteelMat);
+    blade.position.y = 0.55;
+    blade.castShadow = true;
+    normalSwordGroup.add(blade);
+
+    const bladeTip = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.25, 0.06), brightSteelMat);
+    bladeTip.position.y = 1.225;
+    bladeTip.castShadow = true;
+    normalSwordGroup.add(bladeTip);
+
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.15), new THREE.MeshStandardMaterial({ color: 0xbdc3c7, metalness: 0.9, roughness: 0.2 }));
+    guard.position.y = 0.05;
+    normalSwordGroup.add(guard);
+    
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.3, 0.12), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+    handle.position.y = -0.1;
+    normalSwordGroup.add(handle);
+
+    const bossSwordGroup = new THREE.Group();
+    bossSwordGroup.position.set(0, 0, 0.4);
+    bossSwordGroup.visible = false;
+    
+    const bossBladeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.95, roughness: 0.1, emissive: 0x4b6584, emissiveIntensity: 0.5 }); 
+    const bossBlade = new THREE.Mesh(new THREE.BoxGeometry(0.42, 2.0, 0.14), bossBladeMat);
+    bossBlade.position.y = 1.0;
+    bossBlade.castShadow = true;
+    bossSwordGroup.add(bossBlade);
+
+    const bossCore = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.3, 0.18), new THREE.MeshStandardMaterial({ color: 0x9b59b6, emissive: 0x8e44ad, emissiveIntensity: 0.9 }));
+    bossCore.position.y = 1.0;
+    bossSwordGroup.add(bossCore);
+
+    const bossGuard = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.25, 0.35), new THREE.MeshStandardMaterial({ color: 0xecf0f1, metalness: 0.9, roughness: 0.2 }));
+    bossGuard.position.y = 0.05;
+    bossSwordGroup.add(bossGuard);
+
+    const gemMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00d2d3, emissiveIntensity: 0.9, roughness: 0.1 });
+    const centerGem = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), gemMat);
+    centerGem.position.set(0, 0.05, 0.1);
+    bossSwordGroup.add(centerGem);
+
+    const bladeGem1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 0.16), gemMat);
+    bladeGem1.position.set(0, 0.8, 0);
+    bossSwordGroup.add(bladeGem1);
+
+    const spikeL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.5, 0.22), new THREE.MeshStandardMaterial({ color: 0xe74c3c }));
+    spikeL.position.set(-0.65, 0.15, 0);
+    spikeL.rotation.z = -0.3;
+    bossSwordGroup.add(spikeL);
+
+    const spikeR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.5, 0.22), new THREE.MeshStandardMaterial({ color: 0xe74c3c }));
+    spikeR.position.set(0.65, 0.15, 0);
+    spikeR.rotation.z = 0.3;
+    bossSwordGroup.add(spikeR);
+
+    const bossHandle = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.2), new THREE.MeshStandardMaterial({ color: 0x2c3e50 }));
+    bossHandle.position.y = -0.25;
+    bossSwordGroup.add(bossHandle);
+
+    const bossPommel = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.25, 0.35), new THREE.MeshStandardMaterial({ color: 0xbdc3c7 }));
+    bossPommel.position.y = -0.52;
+    bossSwordGroup.add(bossPommel);
+
+    const pommelGem = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15), gemMat);
+    pommelGem.position.set(0, -0.52, 0.12);
+    bossSwordGroup.add(pommelGem);
+
+    weaponPivot.add(normalSwordGroup);
+    weaponPivot.add(bossSwordGroup);
+
+    let comboStep = 0;
+    let isSlamming = false;
+    let isWeaponDrawn = false;
+    let timeSinceLastAction = 0;
+
+    let isGlowOn = false;
+    let isFireOn = false;
+    let isThunderOn = false;
+    let isBossWeapon = false;
+
+    function toggleGlow() {
+        isGlowOn = !isGlowOn;
+        const btn = document.getElementById("glowBtn");
+        if (isGlowOn) {
+            btn.innerText = "Brillo Flúor: ON";
+            btn.style.background = "#f1c40f";
+            btn.style.color = "#000";
+            swordLight.color.setHex(0xffff00);
+            swordLight.intensity = 2.5;
+        } else {
+            btn.innerText = "Brillo Flúor: OFF";
+            btn.style.background = "#3498db";
+            btn.style.color = "#fff";
+            swordLight.intensity = (isFireOn || isThunderOn) ? 3.0 : 0;
+        }
+    }
+
+    function toggleFire() {
+        isFireOn = !isFireOn;
+        const btn = document.getElementById("fireBtn");
+        if (isFireOn) {
+            btn.innerText = "Fuego: ON";
+            btn.style.background = "#d35400";
+            swordLight.color.setHex(0xff4500);
+            swordLight.intensity = 3.0;
+        } else {
+            btn.innerText = "Fuego: OFF";
+            btn.style.background = "#e67e22";
+            swordLight.intensity = (isGlowOn ? 2.5 : (isThunderOn ? 3.5 : 0));
+        }
+    }
+
+    function toggleThunder() {
+        isThunderOn = !isThunderOn;
+        const btn = document.getElementById("thunderBtn");
+        if (isThunderOn) {
+            btn.innerText = "Trueno: ON";
+            btn.style.background = "#00d2d3";
+            swordLight.color.setHex(0x00d2d3);
+            swordLight.intensity = 3.5;
+        } else {
+            btn.innerText = "Trueno: OFF";
+            btn.style.background = "#2980b9";
+            swordLight.intensity = (isGlowOn ? 2.5 : (isFireOn ? 3.0 : 0));
+        }
+    }
+
+    function toggleRain() {
+        isRainOn = !isRainOn;
+        if (isRainOn && isSnowOn) toggleSnow(); 
+        const btn = document.getElementById("rainBtn");
+        if (isRainOn) {
+            btn.innerText = "Lluvia: ON";
+            btn.style.background = "#1b4f72";
+            initRain();
+        } else {
+            btn.innerText = "Lluvia: OFF";
+            btn.style.background = "#2980b9";
+            clearRain();
+        }
+    }
+
+    function toggleSnow() {
+        isSnowOn = !isSnowOn;
+        if (isSnowOn && isRainOn) toggleRain(); 
+        const btn = document.getElementById("snowBtn");
+        if (isSnowOn) {
+            btn.innerText = "Nieve: ON";
+            btn.style.background = "#2874a6";
+            snowGround.visible = true;
+            resetSnowCanvas(true);
+            snowTexture.needsUpdate = true;
+            snowCaps.forEach(cap => cap.visible = true); 
+            initSnow();
+        } else {
+            btn.innerText = "Nieve: OFF";
+            btn.style.background = "#5dade2";
+            snowGround.visible = false;
+            snowCaps.forEach(cap => cap.visible = false); 
+            clearSnow();
+        }
+    }
+
+    function initRain() {
+        for (let i = 0; i < 300; i++) {
+            const drop = new THREE.Mesh(
+                new THREE.BoxGeometry(0.06, 0.8, 0.06),
+                new THREE.MeshBasicMaterial({ color: 0x85c1e9, transparent: true, opacity: 0.6 })
+            );
+            drop.position.set((Math.random() - 0.5) * 120, Math.random() * 30 + 5, (Math.random() - 0.5) * 120);
+            scene.add(drop);
+            raindrops.push(drop);
+        }
+    }
+
+    function clearRain() {
+        raindrops.forEach(drop => scene.remove(drop));
+        raindrops = [];
+    }
+
+    function initSnow() {
+        for (let i = 0; i < 350; i++) {
+            const flake = new THREE.Mesh(
+                new THREE.BoxGeometry(0.15, 0.15, 0.15),
+                new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })
+            );
+            flake.position.set((Math.random() - 0.5) * 120, Math.random() * 30 + 5, (Math.random() - 0.5) * 120);
+            scene.add(flake);
+            snowflakes.push(flake);
+        }
+    }
+
+    function clearSnow() {
+        snowflakes.forEach(flake => scene.remove(flake));
+        snowflakes = [];
+    }
+
+    function triggerRandomThunderStrike() {
+        let rx = playerContainer.position.x + (Math.random() - 0.5) * 20;
+        let rz = playerContainer.position.z + (Math.random() - 0.5) * 20;
+        
+        const bolt = new THREE.Mesh(
+            new THREE.BoxGeometry(0.3, 40, 0.3),
+            new THREE.MeshBasicMaterial({ color: 0x00d2d3, transparent: true, opacity: 0.9 })
+        );
+        bolt.position.set(rx, 20, rz);
+        scene.add(bolt);
+        particles.push({ mesh: bolt, vel: new THREE.Vector3(0,0,0), life: 0.2 });
+
+        spawnParticles(new THREE.Vector3(rx, 0, rz), 0x00d2d3, 12);
+
+        const flash = document.getElementById("flash-overlay");
+        flash.style.opacity = "0.75";
+        setTimeout(() => { flash.style.opacity = "0"; }, 80);
+    }
+
+    function toggleWeaponModel() {
+        isBossWeapon = !isBossWeapon;
+        const btn = document.getElementById("weaponBtn");
+        if (isBossWeapon) {
+            btn.innerText = "Arma: Épica (Jefe)";
+            btn.style.background = "#8e44ad";
+            normalSwordGroup.visible = false;
+            bossSwordGroup.visible = true;
+            player.atk += 15; 
+        } else {
+            btn.innerText = "Arma: Normal";
+            btn.style.background = "#9b59b6";
+            normalSwordGroup.visible = true;
+            bossSwordGroup.visible = false;
+            player.atk -= 15;
+        }
+        document.getElementById("atk").innerText = player.atk;
+    }
+
+    const playerHpBarDiv = document.createElement("div");
+    playerHpBarDiv.className = "player-hp-container";
+    playerHpBarDiv.innerHTML = `<div class="player-hp-fill" style="width: 100%;"></div>`;
+    document.body.appendChild(playerHpBarDiv);
+
+    function spawnParticles(pos, colorHex, count = 8) {
+        for (let i = 0; i < count; i++) {
+            const pMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.15, 0.15, 0.15),
+                new THREE.MeshStandardMaterial({ color: colorHex })
+            );
+            pMesh.position.copy(pos);
+            pMesh.position.y += 0.5;
+            scene.add(pMesh);
+
+            particles.push({
+                mesh: pMesh,
+                vel: new THREE.Vector3(
+                    (Math.random() - 0.5) * 4,
+                    Math.random() * 4 + 1,
+                    (Math.random() - 0.5) * 4
+                ),
+                life: 0.5
+            });
+        }
+    }
+
+    function paintSnowFootprint(worldX, worldZ, isBlood = false) {
+        if (!isSnowOn) return;
+        let cx = ((worldX + 80) / 160) * 1024;
+        let cy = ((worldZ + 80) / 160) * 1024;
+
+        snowCtx.save();
+        snowCtx.translate(cx, cy);
+        if (isBlood) {
+            snowCtx.fillStyle = '#660000';
+            snowCtx.beginPath();
+            snowCtx.arc(0, 0, 12, 0, Math.PI * 2);
+            snowCtx.fill();
+        } else {
+            snowCtx.fillStyle = '#d5dbdb';
+            snowCtx.beginPath();
+            snowCtx.ellipse(0, -4, 5, 9, 0, 0, Math.PI * 2);
+            snowCtx.ellipse(0, 4, 5, 9, 0, 0, Math.PI * 2);
+            snowCtx.fill();
+        }
+        snowCtx.restore();
+        snowTexture.needsUpdate = true;
+    }
+
+    let snowTrails = [];
+    function spawnSnowTrail(pos) {
+        if (!isSnowOn) return;
+        const trailGeo = new THREE.PlaneGeometry(0.8, 0.8);
+        const trailMat = new THREE.MeshBasicMaterial({ color: 0xd0d7d7, transparent: true, opacity: 0.7 });
+        const trailMesh = new THREE.Mesh(trailGeo, trailMat);
+        trailMesh.rotation.x = -Math.PI / 2;
+        trailMesh.position.set(pos.x, 0.018, pos.z);
+        scene.add(trailMesh);
+        snowTrails.push({ mesh: trailMesh, life: 3.5, maxLife: 3.5 });
+    }
+
+    function meltSnowWithFire(worldX, worldZ) {
+        if (!isSnowOn) return;
+        let cx = ((worldX + 80) / 160) * 1024;
+        let cy = ((worldZ + 80) / 160) * 1024;
+
+        snowCtx.save();
+        snowCtx.translate(cx, cy);
+        snowCtx.fillStyle = '#4a7c3f'; 
+        snowCtx.beginPath();
+        snowCtx.arc(0, 0, 35, 0, Math.PI * 2);
+        snowCtx.fill();
+        snowCtx.restore();
+        snowTexture.needsUpdate = true;
+    }
+
+    function spawnBloodSplashAndStains(pos) {
+        for (let i = 0; i < 22; i++) {
+            const bloodDrop = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 0.1, 0.1),
+                new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.2 })
+            );
+            bloodDrop.position.copy(pos);
+            bloodDrop.position.y += 0.6;
+            scene.add(bloodDrop);
+
+            let angle = Math.random() * Math.PI * 2;
+            let speed = Math.random() * 6.0 + 2.0;
+            particles.push({
+                mesh: bloodDrop,
+                vel: new THREE.Vector3(Math.cos(angle) * speed, Math.random() * 5 + 1.5, Math.sin(angle) * speed),
+                life: 0.6
+            });
+        }
+
+        paintSnowFootprint(pos.x, pos.z, true);
+
+        let numStains = 4 + Math.floor(Math.random() * 3);
+        for (let j = 0; j < numStains; j++) {
+            let size = 0.4 + Math.random() * 0.7;
+            const decalGeo = new THREE.PlaneGeometry(size, size);
+            const decalMat = new THREE.MeshBasicMaterial({ color: 0x660000, transparent: true, opacity: 0.9 });
+            const decal = new THREE.Mesh(decalGeo, decalMat);
+            decal.rotation.x = -Math.PI / 2;
+            decal.rotation.z = Math.random() * Math.PI;
+            
+            let offsetX = (Math.random() - 0.5) * 1.5;
+            let offsetZ = (Math.random() - 0.5) * 1.5;
+            decal.position.set(pos.x + offsetX, 0.016, pos.z + offsetZ);
+            scene.add(decal);
+
+            bloodDecals.push({ mesh: decal, life: 8.0, maxLife: 8.0 });
+        }
+    }
+
+    function spawnRatGore(pos) {
+        let pieceColors = [0x7f8c8d, 0xd35400, 0x2c3e50, 0x660000];
+        let numPieces = 5 + Math.floor(Math.random() * 4);
+
+        for (let i = 0; i < numPieces; i++) {
+            let size = 0.2 + Math.random() * 0.3;
+            const pieceGeo = new THREE.BoxGeometry(size, size * 0.8, size * 1.2);
+            const pieceMat = new THREE.MeshStandardMaterial({ color: pieceColors[Math.floor(Math.random() * pieceColors.length)], roughness: 0.5 });
+            const piece = new THREE.Mesh(pieceGeo, pieceMat);
+            
+            piece.position.copy(pos);
+            piece.position.y += 0.4;
+            scene.add(piece);
+
+            let angle = Math.random() * Math.PI * 2;
+            let speed = Math.random() * 4.0 + 1.0;
+            gorePieces.push({
+                mesh: piece,
+                vel: new THREE.Vector3(Math.cos(angle) * speed, Math.random() * 4 + 2, Math.sin(angle) * speed),
+                rotVel: new THREE.Vector3((Math.random()-0.5)*10, (Math.random()-0.5)*10, (Math.random()-0.5)*10),
+                life: 4.0 
+            });
+        }
+    }
+
+    function spawnGroundSlamEffect(pos) {
+        for (let i = 0; i < 25; i++) {
+            const shockMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.25, 0.25, 0.25),
+                new THREE.MeshStandardMaterial({ color: 0xbdc3c7, roughness: 0.5 })
+            );
+            shockMesh.position.copy(pos);
+            shockMesh.position.y += 0.1;
+            scene.add(shockMesh);
+
+            let angle = Math.random() * Math.PI * 2;
+            let speed = Math.random() * 8.0 + 3.0;
+            particles.push({
+                mesh: shockMesh,
+                vel: new THREE.Vector3(Math.cos(angle) * speed, Math.random() * 3 + 1, Math.sin(angle) * speed),
+                life: 0.6
+            });
+        }
+    }
+
+    function spawnFootstepDust(pos) {
+        paintSnowFootprint(pos.x, pos.z, false);
+        spawnSnowTrail(pos);
+
+        for (let i = 0; i < 3; i++) {
+            const dust = new THREE.Mesh(
+                new THREE.BoxGeometry(0.12, 0.12, 0.12),
+                new THREE.MeshStandardMaterial({ color: isSnowOn ? 0xffffff : 0x8c6239, roughness: 1.0, transparent: true, opacity: 0.7 })
+            );
+            dust.position.copy(pos);
+            dust.position.x += (Math.random() - 0.5) * 0.4;
+            dust.position.z += (Math.random() - 0.5) * 0.4;
+            dust.position.y += 0.05;
+            scene.add(dust);
+
+            particles.push({
+                mesh: dust,
+                vel: new THREE.Vector3((Math.random() - 0.5) * 0.8, Math.random() * 0.5 + 0.2, (Math.random() - 0.5) * 0.8),
+                life: 0.35
+            });
+        }
+    }
+
+    function spawnJumpTrail(pos) {
+        let trailColor = isGlowOn ? 0xffff00 : (isFireOn ? 0xff4500 : (isThunderOn ? 0x00d2d3 : 0xe74c3c));
+        let hasLightActive = isGlowOn || isFireOn || isThunderOn;
+        let count = hasLightActive ? 18 : 5;
+        let pSize = hasLightActive ? 0.35 : 0.25;
+
+        for (let i = 0; i < count; i++) {
+            const pMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(pSize, 0.15, pSize),
+                new THREE.MeshStandardMaterial({ color: trailColor, transparent: true, opacity: hasLightActive ? 0.95 : 0.85, emissive: hasLightActive ? trailColor : 0x000000 })
+            );
+            pMesh.position.copy(pos);
+            pMesh.position.x += (Math.random() - 0.5) * 1.2;
+            pMesh.position.z += (Math.random() - 0.5) * 1.2;
+            scene.add(pMesh);
+
+            particles.push({
+                mesh: pMesh,
+                vel: new THREE.Vector3((Math.random() - 0.5) * 1.5, -0.2, (Math.random() - 0.5) * 1.5),
+                life: hasLightActive ? 0.6 : 0.35
+            });
+        }
+    }
+
+    function showFloatingText(worldPos, text, isPlayer = false) {
+        const tempV = worldPos.clone();
+        tempV.y += 1.2;
+        tempV.project(camera);
+
+        const x = (tempV.x * .5 + .5) * window.innerWidth;
+        const y = (tempV.y * -.5 + .5) * window.innerHeight;
+
+        const div = document.createElement("div");
+        div.className = "damage-number" + (isPlayer ? " damage-player" : "");
+        div.innerText = text;
+        div.style.left = `${x}px`;
+        div.style.top = `${y}px`;
+        document.body.appendChild(div);
+
+        setTimeout(() => div.remove(), 800);
+    }
+
+    function triggerDamageFlash() {
+        const dFlash = document.getElementById("damage-flash");
+        dFlash.style.opacity = "1";
+        setTimeout(() => { dFlash.style.opacity = "0"; }, 150);
+    }
+
+    function toggleShop() {
+        const shop = document.getElementById("shop");
+        shop.style.display = shop.style.display === "block" ? "none" : "block";
+    }
+
+    let player = { hp: 100, maxHp: 100, atk: 25, gold: 0, speed: 9.0, yVel: 0, jumpsLeft: 2, radius: 0.35 };
+    let enemies = [];
+    let keys = {};
+    let isAttacking = false;
+    let attackProgress = 0;
+    let attackCooldown = 0;
+    let walkTimer = 0;
+    let thunderTimer = 0;
+    
+    let isSpinningDoubleJump = false;
+    let spinProgress = 0;
+
+    window.addEventListener("keydown", (e) => {
+        let key = e.key.toLowerCase();
+        keys[key] = true;
+
+        if (key === 'b') toggleShop();
+
+        if (e.code === 'Space') {
+            isWeaponDrawn = true;
+            timeSinceLastAction = 0;
+
+            if (player.jumpsLeft === 2) {
+                player.yVel = 12.0;
+                player.jumpsLeft--;
+                spawnJumpTrail(playerContainer.position);
+            } else if (player.jumpsLeft === 1) {
+                player.yVel = 16.5;
+                player.jumpsLeft--;
+                isSlamming = true; 
+                isSpinningDoubleJump = true; 
+                spinProgress = 0;
+                
+                let forwardDir = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerContainer.rotation.y);
+                playerContainer.position.addScaledVector(forwardDir, 2.0);
+
+                spawnJumpTrail(playerContainer.position);
+            }
+        }
+    });
+
+    window.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
+
+    window.addEventListener("mousedown", () => {
+        let isAirborne = playerContainer.position.y > 0.1;
+        if (isAirborne && !isSpinningDoubleJump) return; 
+
+        if (attackCooldown <= 0) {
+            isWeaponDrawn = true;
+            timeSinceLastAction = 0;
+            isAttacking = true;
+            attackProgress = 0;
+            attackCooldown = 0.4; 
+            comboStep = (comboStep + 1) % 3; 
+
+            let bonusAtk = isFireOn ? 10 : (isThunderOn ? 12 : 0);
+            let totalAtk = player.atk + bonusAtk;
+
+            if (isFireOn && isSnowOn) {
+                meltSnowWithFire(playerContainer.position.x, playerContainer.position.z);
+            }
+
+            enemies.forEach(en => {
+                let dist = playerContainer.position.distanceTo(en.mesh.position);
+                let hitDist = en.isBoss ? 3.8 : 3.2;
+                if (dist < hitDist) {
+                    let playerForward = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerContainer.rotation.y);
+                    let toEnemy = en.mesh.position.clone().sub(playerContainer.position).normalize();
+                    let dot = playerForward.dot(toEnemy);
+
+                    if (dot > 0.3 || isSpinningDoubleJump) {
+                        en.hp -= totalAtk;
+                        showFloatingText(en.mesh.position, `-${totalAtk}`);
+                        spawnParticles(en.mesh.position, 0x8b0000, 10); 
+                        en.mesh.position.addScaledVector(toEnemy, 0.8);
+                    }
+                }
+            });
+        }
+    });
+
+    function buyUpgrade(type) {
+        if (type === 'atk' && player.gold >= 50) {
+            player.gold -= 50;
+            player.atk += 15;
+            document.getElementById("atk").innerText = player.atk;
+            updateUI();
+        } else if (type === 'heal' && player.gold >= 50) {
+            player.gold -= 50;
+            player.hp = player.maxHp;
+            updateUI();
+        } else {
+            alert("¡Oro insuficiente! (Necesitas 50 de oro)");
+        }
+    }
+
+    function spawnRatForCave(cave) {
+        if (cave.currentMobs >= cave.maxMobs) return;
+
+        const isBoss = (cave.maxMobs >= 3 && Math.random() < 0.3 && !enemies.some(e => e.homeCave === cave && e.isBoss));
+
+        const ratGroup = new THREE.Group();
+        const colorTypes = [0x7f8c8d, 0xecf0f1, 0xd35400];
+        const chosenColor = colorTypes[Math.floor(Math.random() * colorTypes.length)];
+        
+        const ratMat = new THREE.MeshStandardMaterial({ color: isBoss ? 0x2c3e50 : chosenColor });
+        const pinkMat = new THREE.MeshStandardMaterial({ color: 0xe84393 });
+
+        let scale = isBoss ? 1.8 : 1.0;
+        ratGroup.scale.set(scale, scale, scale);
+
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 1.2), ratMat);
+        body.position.y = 0.3;
+        body.castShadow = true;
+        ratGroup.add(body);
+
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.6), ratMat);
+        head.position.set(0, 0.4, 0.7);
+        head.castShadow = true;
+        ratGroup.add(head);
+
+        const earL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.05), pinkMat);
+        earL.position.set(0.25, 0.7, 0.6);
+        ratGroup.add(earL);
+        const earR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.05), pinkMat);
+        earR.position.set(-0.25, 0.7, 0.6);
+        ratGroup.add(earR);
+
+        const tail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.8), pinkMat);
+        tail.position.set(0, 0.3, -0.9);
+        ratGroup.add(tail);
+
+        ratGroup.position.set(cave.x + (Math.random() - 0.5) * 3, 0, cave.z + 4);
+        scene.add(ratGroup);
+
+        const hpBarDiv = document.createElement("div");
+        hpBarDiv.className = "mob-hp-container";
+        if(isBoss) hpBarDiv.style.width = "60px";
+        hpBarDiv.innerHTML = `<div class="mob-hp-fill" style="width: 100%; background: ${isBoss ? '#9b59b6' : '#e74c3c'};"></div>`;
+        document.body.appendChild(hpBarDiv);
+
+        cave.currentMobs++;
+
+        enemies.push({ 
+            mesh: ratGroup, 
+            hp: isBoss ? 120 : 40, 
+            maxHp: isBoss ? 120 : 40, 
+            speed: isBoss ? 2.5 : 3.5, 
+            radius: isBoss ? 0.8 : 0.4,
+            hpElement: hpBarDiv,
+            homeCave: cave,
+            isBoss: isBoss,
+            wanderTimer: 0,
+            wanderTarget: new THREE.Vector3(cave.x, 0, cave.z),
+            trailTimer: 0
+        });
+    }
+
+    caves.forEach(cave => {
+        for (let i = 0; i < cave.maxMobs; i++) {
+            spawnRatForCave(cave);
+        }
+    });
+
+    function updateUI() {
+        document.getElementById("hpBar").value = player.hp;
+        document.getElementById("hpText").innerText = Math.floor(player.hp) + "/" + player.maxHp;
+        document.getElementById("gold").innerText = player.gold;
+        
+        let hpPercent = Math.max(0, (player.hp / player.maxHp) * 100);
+        playerHpBarDiv.querySelector('.player-hp-fill').style.width = hpPercent + "%";
+    }
+
+    let clock = new THREE.Clock();
+    let fpsTimer = 0;
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        let delta = clock.getDelta();
+        if (delta > 0.1) delta = 0.1;
+
+        fpsTimer += delta;
+        if (fpsTimer >= 0.5) {
+            document.getElementById("fpsVal").innerText = Math.round(1 / delta);
+            fpsTimer = 0;
+        }
+
+        let elapsedTime = clock.getElapsedTime();
+
+        let cycleDuration = 60.0;
+        let cycleProgress = (elapsedTime % cycleDuration) / cycleDuration;
+        let cycleFactor = Math.sin(cycleProgress * Math.PI * 2) * 0.5 + 0.5;
+
+        let totalMinutesInDay = cycleProgress * 24 * 60;
+        let hours = Math.floor(totalMinutesInDay / 60);
+        let minutes = Math.floor(totalMinutesInDay % 60);
+        let ampm = hours >= 12 ? "PM" : "AM";
+        let displayHours = hours % 12;
+        if (displayHours === 0) displayHours = 12;
+        let timeString = `${String(displayHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+        document.getElementById("clock-display").innerText = `Hora: ${timeString}`;
+
+        const dayColor = new THREE.Color(0x3a6073);
+        const nightColor = new THREE.Color(0x0f172a);
+        
+        if (!isSnowOn) {
+            scene.background.lerpColors(nightColor, dayColor, cycleFactor);
+            scene.fog.color.copy(scene.background);
+        }
+
+        ambientLight.intensity = THREE.MathUtils.lerp(0.15, 0.55, cycleFactor);
+        dirLight.intensity = THREE.MathUtils.lerp(0.1, 0.9, cycleFactor);
+
+        if (attackCooldown > 0) attackCooldown -= delta;
+
+        swordLight.position.set(playerContainer.position.x, playerContainer.position.y + 0.1, playerContainer.position.z);
+
+        if (isFireOn && isSnowOn && isWeaponDrawn) {
+            meltSnowWithFire(playerContainer.position.x, playerContainer.position.z);
+        }
+
+        let bladeWorldPos = new THREE.Vector3();
+        let activeBladeMesh = isBossWeapon ? bossBlade : blade;
+        activeBladeMesh.getWorldPosition(bladeWorldPos);
+
+        if (isGlowOn && isWeaponDrawn) {
+            const glowMesh = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshBasicMaterial({ color: 0xffff00 }));
+            glowMesh.position.set(bladeWorldPos.x + (Math.random()-0.5)*0.8, bladeWorldPos.y + (Math.random()-0.5)*1.2, bladeWorldPos.z + (Math.random()-0.5)*0.8);
+            scene.add(glowMesh);
+            particles.push({ mesh: glowMesh, vel: new THREE.Vector3(0, 1.0, 0), life: 0.4 });
+        }
+
+        if (isFireOn && isWeaponDrawn) {
+            const fireMesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: Math.random() > 0.5 ? 0xff4500 : 0xffcc00 }));
+            fireMesh.position.set(bladeWorldPos.x + (Math.random()-0.5)*0.4, bladeWorldPos.y + (Math.random()-0.5)*0.8, bladeWorldPos.z + (Math.random()-0.5)*0.4);
+            scene.add(fireMesh);
+            particles.push({ mesh: fireMesh, vel: new THREE.Vector3(0, 2.0, 0), life: 0.3 });
+        }
+
+        if (isThunderOn && isWeaponDrawn) {
+            const thunderMesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: 0x00d2d3 }));
+            thunderMesh.position.set(bladeWorldPos.x + (Math.random()-0.5)*0.5, bladeWorldPos.y + (Math.random()-0.5)*0.8, bladeWorldPos.z + (Math.random()-0.5)*0.5);
+            scene.add(thunderMesh);
+            particles.push({ mesh: thunderMesh, vel: new THREE.Vector3(0, 2.5, 0), life: 0.25 });
+        }
+
+        if (isRainOn) {
+            raindrops.forEach(drop => {
+                drop.position.y -= 25 * delta;
+                if (drop.position.y < 0) drop.position.y = 35;
+            });
+
+            thunderTimer += delta;
+            if (thunderTimer >= 4.0 + Math.random() * 5.0) {
+                thunderTimer = 0;
+                triggerRandomThunderStrike();
+            }
+        }
+
+        if (isSnowOn) {
+            snowflakes.forEach(flake => {
+                flake.position.y -= 5 * delta;
+                flake.position.x += Math.sin(elapsedTime + flake.position.z) * 0.5 * delta;
+                if (flake.position.y < 0) flake.position.y = 35;
+            });
+        }
+
+        let moveX = 0, moveZ = 0;
+        if (keys['w']) moveZ -= 1;
+        if (keys['s']) moveZ += 1;
+        if (keys['a']) moveX -= 1;
+        if (keys['d']) moveX += 1;
+
+        let isMoving = (moveX !== 0 || moveZ !== 0);
+
+        if (isMoving) {
+            let dir = new THREE.Vector3(moveX, 0, moveZ).normalize();
+            let nextX = playerContainer.position.x + dir.x * player.speed * delta;
+            let nextZ = playerContainer.position.z + dir.z * player.speed * delta;
+
+            obstacles.forEach(obs => {
+                let d = Math.hypot(nextX - obs.x, nextZ - obs.z);
+                let minDist = obs.radius + player.radius;
+                if (d < minDist) {
+                    if (obs.isPlatform && playerContainer.position.y >= obs.height - 0.2) {
+                        // Permite caminar encima si está a la altura
+                    } else {
+                        let angle = Math.atan2(nextZ - obs.z, nextX - obs.x);
+                        nextX = obs.x + Math.cos(angle) * minDist;
+                        nextZ = obs.z + Math.sin(angle) * minDist;
+                    }
+                }
+            });
+
+            playerContainer.position.x = nextX;
+            playerContainer.position.z = nextZ;
+            playerContainer.rotation.y = Math.atan2(dir.x, dir.z);
+
+            walkTimer += delta * 12;
+            leftHandPivot.rotation.x = Math.sin(walkTimer) * 0.6;
+            rightHandPivot.rotation.x = -Math.sin(walkTimer) * 0.6;
+            leftFootPivot.rotation.x = -Math.sin(walkTimer) * 0.6;
+            rightFootPivot.rotation.x = -Math.sin(walkTimer) * 0.6;
+
+            if (Math.sin(walkTimer) > 0.9 && Math.random() < 0.3 && playerContainer.position.y <= 0.1) {
+                spawnFootstepDust(playerContainer.position);
+            }
+        } else {
+            leftHandPivot.rotation.x = 0;
+            rightHandPivot.rotation.x = 0;
+            leftFootPivot.rotation.x = 0;
+            rightFootPivot.rotation.x = 0;
+        }
+
+        let inCombat = false;
+        enemies.forEach(en => {
+            if (playerContainer.position.distanceTo(en.mesh.position) < 8.0) {
+                inCombat = true;
+            }
+        });
+
+        if (!inCombat && !isAttacking && playerContainer.position.y <= 0.1) {
+            timeSinceLastAction += delta;
+            if (timeSinceLastAction >= 2.5) {
+                isWeaponDrawn = false; 
+            }
+        } else {
+            timeSinceLastAction = 0;
+        }
+
+        player.yVel -= 35.0 * delta;
+        playerContainer.position.y += player.yVel * delta;
+
+        let targetFloor = 0;
+        obstacles.forEach(obs => {
+            let distToPlat = Math.hypot(playerContainer.position.x - obs.x, playerContainer.position.z - obs.z);
+            let checkRadius = obs.isTree ? 1.5 : (obs.radius + 0.3);
+            
+            if (distToPlat < checkRadius) {
+                if (playerContainer.position.y >= obs.height - 0.6 && player.yVel <= 2.0) {
+                    if (obs.height > targetFloor) {
+                        targetFloor = obs.height;
+                    }
+                }
+            }
+        });
+
+        let justLanded = false;
+        if (playerContainer.position.y <= targetFloor) {
+            if (player.yVel < -10) {
+                justLanded = true;
+            }
+            playerContainer.position.y = targetFloor;
+            player.yVel = 0;
+            player.jumpsLeft = 2;
+            isSpinningDoubleJump = false;
+            playerGroup.rotation.x = 0;
+        }
+
+        if (justLanded && isSlamming) {
+            isSlamming = false;
+            spawnGroundSlamEffect(playerContainer.position);
+
+            let bonusAtk = isFireOn ? 15 : (isThunderOn ? 20 : 5);
+            let slamDamage = player.atk + bonusAtk + 15; 
+
+            if (isFireOn && isSnowOn) {
+                meltSnowWithFire(playerContainer.position.x, playerContainer.position.z);
+            }
+
+            enemies.forEach(en => {
+                let dist = playerContainer.position.distanceTo(en.mesh.position);
+                if (dist < 4.5) {
+                    en.hp -= slamDamage;
+                    showFloatingText(en.mesh.position, `-${slamDamage}`);
+                    spawnParticles(en.mesh.position, 0x8b0000, 12);
+                    let pushDir = en.mesh.position.clone().sub(playerContainer.position).normalize();
+                    en.mesh.position.addScaledVector(pushDir, 1.5);
+                }
+            });
+        }
+
+        if (isSpinningDoubleJump) {
+            spinProgress += delta * 12;
+            playerGroup.rotation.x = spinProgress;
+            if (spinProgress >= Math.PI * 2) {
+                isSpinningDoubleJump = false;
+                playerGroup.rotation.x = 0;
+            }
+        }
+
+        if (!isWeaponDrawn) {
+            normalSwordGroup.visible = false;
+            bossSwordGroup.visible = false;
+            storedHiltGroup.visible = true;
+            weaponPivot.rotation.set(0, 0, 0);
+        } else {
+            storedHiltGroup.visible = false;
+            if (isBossWeapon) {
+                normalSwordGroup.visible = false;
+                bossSwordGroup.visible = true;
+            } else {
+                normalSwordGroup.visible = true;
+                bossSwordGroup.visible = false;
+            }
+
+            if (isSlamming) {
+                weaponPivot.rotation.x = Math.PI / 2; 
+                weaponPivot.rotation.y = 0;
+                weaponPivot.rotation.z = 0;
+                weaponPivot.position.set(0, 0.2, 0.2); 
+            } else if (isAttacking) {
+                weaponPivot.position.set(0, 0, 0);
+                attackProgress += delta * 15; 
+
+                if (comboStep === 0) {
+                    weaponPivot.rotation.y = Math.sin(attackProgress) * 3.0 - 1.2; 
+                    weaponPivot.rotation.x = Math.sin(attackProgress * 0.5) * 0.3;
+                    weaponPivot.rotation.z = 0.2;
+                } else if (comboStep === 1) {
+                    weaponPivot.rotation.x = Math.sin(attackProgress) * 2.5 - 0.8;
+                    weaponPivot.rotation.y = Math.cos(attackProgress) * 1.0;
+                    weaponPivot.rotation.z = 0.4;
+                } else {
+                    weaponPivot.rotation.z = Math.sin(attackProgress) * 2.2;
+                    weaponPivot.rotation.x = 0.4;
+                    weaponPivot.rotation.y = Math.sin(attackProgress) * 1.5;
+                }
+
+                if (attackProgress >= Math.PI) {
+                    isAttacking = false;
+                    weaponPivot.rotation.set(0, 0, 0);
+                }
+            } else {
+                weaponPivot.position.set(0, 0, 0);
+                weaponPivot.rotation.set(0, 0, 0);
+            }
+        }
+
+        caves.forEach(cave => {
+            if (cave.currentMobs < cave.maxMobs) {
+                if (cave.spawningTimer === 0) {
+                    cave.spawningTimer = 10 + Math.random() * 5; 
+                } else {
+                    cave.spawningTimer -= delta;
+                    if (cave.spawningTimer <= 0) {
+                        spawnRatForCave(cave);
+                        cave.spawningTimer = 0;
+                    }
+                }
+            }
+        });
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.mesh.position.addScaledVector(p.vel, delta);
+            p.life -= delta;
+            p.mesh.scale.multiplyScalar(Math.pow(0.1, delta));
+            if (p.life <= 0) {
+                scene.remove(p.mesh);
+                particles.splice(i, 1);
+            }
+        }
+
+        for (let i = bloodDecals.length - 1; i >= 0; i--) {
+            let bd = bloodDecals[i];
+            bd.life -= delta;
+            if (bd.life <= 2.0) {
+                bd.mesh.material.opacity = (bd.life / 2.0) * 0.9;
+            }
+            if (bd.life <= 0) {
+                scene.remove(bd.mesh);
+                bloodDecals.splice(i, 1);
+            }
+        }
+
+        for (let i = snowTrails.length - 1; i >= 0; i--) {
+            let st = snowTrails[i];
+            st.life -= delta;
+            if (st.life <= 1.5) {
+                st.mesh.material.opacity = (st.life / 1.5) * 0.7;
+            }
+            if (st.life <= 0) {
+                scene.remove(st.mesh);
+                snowTrails.splice(i, 1);
+            }
+        }
+
+        for (let i = gorePieces.length - 1; i >= 0; i--) {
+            let gp = gorePieces[i];
+            gp.vel.y -= 25 * delta; 
+            gp.mesh.position.addScaledVector(gp.vel, delta);
+            gp.mesh.rotation.x += gp.rotVel.x * delta;
+            gp.mesh.rotation.y += gp.rotVel.y * delta;
+
+            if (gp.mesh.position.y <= 0) {
+                gp.mesh.position.y = 0;
+                gp.vel.set(0, 0, 0); 
+                gp.rotVel.set(0, 0, 0);
+            }
+
+            gp.life -= delta;
+            if (gp.life <= 1.0) {
+                gp.mesh.scale.multiplyScalar(0.92); 
+            }
+            if (gp.life <= 0) {
+                scene.remove(gp.mesh);
+                gorePieces.splice(i, 1);
+            }
+        }
+
+        enemies.forEach((en, index) => {
+            let distToPlayer = playerContainer.position.distanceTo(en.mesh.position);
+            let distToHome = Math.hypot(en.mesh.position.x - en.homeCave.x, en.mesh.position.z - en.homeCave.z);
+
+            en.mesh.position.y = 0;
+
+            obstacles.forEach(obs => {
+                let dMobObs = Math.hypot(en.mesh.position.x - obs.x, en.mesh.position.z - obs.z);
+                let minMobDist = obs.radius + en.radius;
+                if (dMobObs < minMobDist) {
+                    let pushAngle = Math.atan2(en.mesh.position.z - obs.z, en.mesh.position.x - obs.x);
+                    en.mesh.position.x = obs.x + Math.cos(pushAngle) * minMobDist;
+                    en.mesh.position.z = obs.z + Math.sin(pushAngle) * minMobDist;
+                }
+            });
+
+            let isAggroed = (distToPlayer < 9.0 && distToHome < 16.0);
+
+            en.trailTimer += delta;
+            if (isSnowOn && en.trailTimer >= 0.3) {
+                en.trailTimer = 0;
+                spawnSnowTrail(en.mesh.position);
+            }
+
+            if (isAggroed) {
+                isWeaponDrawn = true;
+                timeSinceLastAction = 0;
+
+                let dir = playerContainer.position.clone().sub(en.mesh.position);
+                dir.y = 0; 
+                let stopDist = en.isBoss ? 1.6 : 1.2;
+                if (distToPlayer > stopDist) {
+                    dir.normalize();
+                    en.mesh.position.addScaledVector(dir, en.speed * delta);
+                    en.mesh.lookAt(playerContainer.position.x, 0, playerContainer.position.z);
+                } else {
+                    if (Math.random() < 0.05) {
+                        let dmg = en.isBoss ? 12 : 5;
+                        player.hp -= dmg;
+                        showFloatingText(playerContainer.position.clone(), `-${dmg}`, true);
+                        spawnParticles(playerContainer.position, 0x8b0000, 6); 
+                        triggerDamageFlash(); 
+                        updateUI();
+                        if (player.hp <= 0) {
+                            alert("¡Derrotado! Reiniciando...");
+                            player.hp = 100;
+                            player.gold = 0;
+                            updateUI();
+                        }
+                    }
+                }
+            } else {
+                en.wanderTimer -= delta;
+                let distToWanderTarget = en.mesh.position.distanceTo(en.wanderTarget);
+                
+                if (en.wanderTimer <= 0 || distToWanderTarget < 0.8) {
+                    en.wanderTimer = 3 + Math.random() * 4; 
+                    let angle = Math.random() * Math.PI * 2;
+                    let radius = Math.random() * 9.0; 
+                    en.wanderTarget.set(
+                        en.homeCave.x + Math.cos(angle) * radius,
+                        0,
+                        en.homeCave.z + Math.sin(angle) * radius
+                    );
+                }
+
+                let dirToTarget = en.wanderTarget.clone().sub(en.mesh.position);
+                dirToTarget.y = 0;
+                
+                if (dirToTarget.length() > 0.1) {
+                    dirToTarget.normalize();
+                    en.mesh.position.addScaledVector(dirToTarget, (en.speed * 0.6) * delta); 
+                    en.mesh.lookAt(en.wanderTarget.x, 0, en.wanderTarget.z);
+                }
+            }
+
+            if (isSnowOn && Math.random() < 0.1) {
+                paintSnowFootprint(en.mesh.position.x, en.mesh.position.z, false);
+            }
+
+            let hpPercent = Math.max(0, (en.hp / en.maxHp) * 100);
+            en.hpElement.querySelector('.mob-hp-fill').style.width = hpPercent + "%";
+
+            let screenPos = en.mesh.position.clone();
+            screenPos.y += en.isBoss ? 2.2 : 1.1;
+            screenPos.project(camera);
+            let sx = (screenPos.x * .5 + .5) * window.innerWidth;
+            let sy = (screenPos.y * -.5 + .5) * window.innerHeight;
+            en.hpElement.style.left = `${sx}px`;
+            en.hpElement.style.top = `${sy}px`;
+
+            if (en.hp <= 0) {
+                spawnBloodSplashAndStains(en.mesh.position);
+                spawnRatGore(en.mesh.position);
+
+                scene.remove(en.mesh);
+                en.hpElement.remove();
+                
+                let assignedCave = en.homeCave;
+                assignedCave.currentMobs--;
+                enemies.splice(index, 1);
+                
+                player.gold += en.isBoss ? 50 : 15;
+                updateUI();
+            }
+        });
+
+        let playerScreenPos = playerContainer.position.clone();
+        playerScreenPos.y += 2.0;
+        playerScreenPos.project(camera);
+        let psx = (playerScreenPos.x * .5 + .5) * window.innerWidth;
+        let psy = (playerScreenPos.y * -.5 + .5) * window.innerHeight;
+        playerHpBarDiv.style.left = `${psx}px`;
+        playerHpBarDiv.style.top = `${psy}px`;
+
+        camera.position.x = playerContainer.position.x;
+        camera.position.y = playerContainer.position.y + 7;
+        camera.position.z = playerContainer.position.z + 10;
+        camera.lookAt(playerContainer.position.x, playerContainer.position.y + 1, playerContainer.position.z);
+
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
